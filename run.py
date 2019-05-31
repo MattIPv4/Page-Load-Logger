@@ -1,7 +1,64 @@
 import socket
+import sqlite3
+from typing import Any
 from warnings import warn
 
 import requests
+
+
+class Database:
+
+    def __init__(self):
+        """
+        Creates a connection to the database
+        """
+        self.__conn = sqlite3.connect("results.db")
+        self.__create_table()
+
+    def __cursor(self) -> sqlite3.Cursor:
+        """
+        Generates a cursor for the database connection
+        :return: Database cursor
+        """
+        return self.__conn.cursor()
+
+    def __save(self):
+        """
+        Commits any recent changes to the database
+        """
+        self.__conn.commit()
+
+    def __execute(self, sql: str, data: Any = ()) -> sqlite3.Cursor:
+        """
+        Executes an sql statement on the database with provided data
+        :param sql: The sql statement to execute
+        :param data: Any data to inject alongside the statement (defaults to empty tuple)
+        :return: Active database cursor
+        """
+        cursor = self.__cursor()
+        cursor.execute(sql, data)
+        self.__save()
+        return cursor
+
+    def __create_table(self):
+        self.__execute('''CREATE TABLE IF NOT EXISTS results
+        (test_id INTEGER PRIMARY KEY,
+        datetime DATETIME DEFAULT CURRENT_TIMESTAMP,
+        target_url TEXT,
+        time_seconds REAL,
+        internal_ip TEXT,
+        external_ip TEXT)''')
+
+    def log(self, target_url: str, time_seconds: float, internal_ip: str, external_ip: str):
+        """
+        Logs a test result to the database
+        :param target_url: The target URL of the test
+        :param time_seconds: The time, in seconds, taken to load the target
+        :param internal_ip: The internal IP of the device testing
+        :param external_ip: The external IP of the network testing
+        """
+        self.__execute('''INSERT INTO results (target_url, time_seconds, internal_ip, external_ip) VALUES (?,?,?,?)''',
+                       (target_url, time_seconds, internal_ip, external_ip))
 
 
 class Tester:
@@ -10,6 +67,7 @@ class Tester:
         """
         Creates the tester class
         """
+        self.__db = Database()
         self.__time = None
         self.__int_ip = None
         self.__ext_ip = None
@@ -67,7 +125,7 @@ class Tester:
         if self.__ext_ip is None:
             warn("External IP is not known, run get_external_ip before log_results")
             return self
-        print(self.__target, self.__time, self.__int_ip, self.__ext_ip)
+        self.__db.log(self.__target, self.__time, self.__int_ip, self.__ext_ip)
 
 
 if __name__ == "__main__":
