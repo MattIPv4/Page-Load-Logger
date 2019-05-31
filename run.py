@@ -7,13 +7,32 @@ import requests
 
 
 class Database:
+    """
+    The database class used internally by the tester
+    """
 
-    def __init__(self):
+    def __init__(self, file: str):
         """
         Creates a connection to the database
+        :param file: The database file location to use
         """
-        self.__conn = sqlite3.connect("results.db")
+        self.__file = file
+        self.__conn = None
+
+    def open(self):
+        """
+        Opens the database connection
+        """
+        self.__conn = sqlite3.connect(self.__file)
         self.__create_table()
+
+    def close(self):
+        """
+        Closes the database connection
+        """
+        self.__save()
+        self.__conn.close()
+        self.__conn = None
 
     def __cursor(self) -> sqlite3.Cursor:
         """
@@ -43,7 +62,7 @@ class Database:
     def __create_table(self):
         self.__execute('''CREATE TABLE IF NOT EXISTS results
         (test_id INTEGER PRIMARY KEY,
-        datetime DATETIME DEFAULT CURRENT_TIMESTAMP,
+        datetime_utc DATETIME DEFAULT CURRENT_TIMESTAMP,
         target_url TEXT,
         time_seconds REAL,
         internal_ip TEXT,
@@ -67,11 +86,36 @@ class Tester:
         """
         Creates the tester class
         """
-        self.__db = Database()
+        self.__db = None
         self.__time = None
         self.__int_ip = None
         self.__ext_ip = None
         self.__target = None
+
+    def close_database_connection(self) -> "Tester":
+        """
+        Closes the database to ensure a clean exit
+        :return: self
+        """
+        if self.__db is None:
+            warn("No database connection to close, use connect_to_database before close_database_connection")
+            return self
+        self.__db.close()
+        self.__db = None
+        return self
+
+    def connect_to_database(self, file: str) -> "Tester":
+        """
+        Creates the database connection for the tester
+        :param file: The file to use for the database
+        :return: self
+        """
+        if self.__db is not None:
+            warn("Existing database was connected, connection closed")
+            self.close_database_connection()
+        self.__db = Database(file)
+        self.__db.open()
+        return self
 
     def set_target(self, target: str) -> "Tester":
         """
@@ -116,6 +160,9 @@ class Tester:
         Logs the results of the most recently run test
         :return: self
         """
+        if self.__db is None:
+            warn("No database connection, run connect_to_database before log_results")
+            return self
         if self.__time is None:
             warn("No time is recorded, run test_target before log_results")
             return self
@@ -130,6 +177,8 @@ class Tester:
 
 if __name__ == "__main__":
     tester = Tester()
+    tester.connect_to_database("results.db")
     tester.get_internal_ip().get_external_ip()
     tester.set_target("https://google.com").test_target().log_results()
     tester.set_target("https://google.co.uk").test_target().log_results()
+    tester.close_database_connection()
