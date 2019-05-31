@@ -1,6 +1,7 @@
 import socket
 import sqlite3
-from typing import Any
+from configparser import ConfigParser
+from typing import Any, Optional, List
 from warnings import warn
 
 import requests
@@ -60,6 +61,9 @@ class Database:
         return cursor
 
     def __create_table(self):
+        """
+        Creates the initial table to store the results if it doesn't exist
+        """
         self.__execute('''CREATE TABLE IF NOT EXISTS results
         (test_id INTEGER PRIMARY KEY,
         datetime_utc DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -81,6 +85,9 @@ class Database:
 
 
 class Tester:
+    """
+    Tests website load times, communicates with database to log
+    """
 
     def __init__(self):
         """
@@ -175,10 +182,76 @@ class Tester:
         self.__db.log(self.__target, self.__time, self.__int_ip, self.__ext_ip)
 
 
-if __name__ == "__main__":
-    tester = Tester()
-    tester.connect_to_database("results.db")
-    tester.get_internal_ip().get_external_ip()
-    tester.set_target("https://google.com").test_target().log_results()
-    tester.set_target("https://google.co.uk").test_target().log_results()
+class Config:
+    """
+    Wrapper for loading the config data
+    """
+
+    def __init__(self, file: str):
+        """
+        Creates a new config instance with the config file
+        :param file: The file to parse the config from
+        """
+        self.__file = file
+        self.__data = None
+
+    def load(self) -> "Config":
+        """
+        Loads the config data from the file
+        :return: self
+        """
+        config_parser = ConfigParser()
+        config_parser.read(self.__file)
+        if "Tester" not in config_parser:
+            warn("Failed to load config, section 'Tester' not found")
+            return self
+        if "Database" not in config_parser:
+            warn("Failed to load config, section 'Database' not found")
+            return self
+        self.__data = config_parser
+        return self
+
+    def database(self) -> Optional[str]:
+        """
+        Gets the database file location from the config
+        :return: Database file
+        """
+        if self.__data is None:
+            warn("Config not loaded, run load before database")
+            return None
+        if "file" not in self.__data["Database"]:
+            warn("'file' not found within 'Database' section, invalid configuration file")
+            return None
+        return self.__data["Database"]["file"]
+
+    def sites(self) -> Optional[List[str]]:
+        """
+        Gets all the sites to test from the config files
+        :return: List of sites
+        """
+        if self.__data is None:
+            warn("Config not loaded, run load before database")
+            return None
+        if "sites" not in self.__data["Tester"]:
+            warn("'sites' not found within 'Tester' section, invalid configuration file")
+            return None
+        return [f.strip() for f in self.__data["Tester"]["sites"].split(",")]
+
+
+def main():
+    """
+    The main function for running this script
+    """
+    # Fetch the config
+    config = Config("config.ini").load()
+    # Create the base tester, set the DB from config & get our IPs
+    tester = Tester().connect_to_database(config.database()).get_internal_ip().get_external_ip()
+    # Test each site from the config file
+    for site in config.sites():
+        tester.set_target(site).test_target().log_results()
+    # We're done, close the db
     tester.close_database_connection()
+
+
+if __name__ == "__main__":
+    main()
