@@ -58,6 +58,20 @@ Once you have run the script, the results will be saved to the database file tha
 This file is a [flat-file SQLite database](https://www.sqlite.org/).
 You can view the data contained through a tool such as the [DB Browser for SQLite](https://sqlitebrowser.org/).
 
+### Database Structure
+
+Within the database there is a single schema, named `results`.
+This houses all result logs from the testing script.
+Each entry contains the following values:
+
+ - `test_id` - INT - Autoincrement-ing ID for each log entry (primary key)
+ - `datetime_utc` - DATETIME - The timestamp when the result was logged, in UTC
+ - `target_url` - TEXT - The target URL of this test
+ - `time_seconds` - REAL - The time the test request took to complete, in seconds
+ - `status_code` - INT - The response status code from the website tested
+ - `internal_ip` - TEXT - The internal IP address of the device that ran the test
+ - `external_ip` - TEXT - The external IP address of the device/network that ran the test
+
 <!-- Contributing -->
 ## Contributing
 
