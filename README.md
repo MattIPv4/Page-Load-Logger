@@ -69,8 +69,12 @@ Each entry contains the following values:
  - `target_url` - TEXT - The target URL of this test
  - `time_seconds` - REAL - The time the test request took to complete, in seconds
  - `status_code` - INT - The response status code from the website tested
+ - `request_error` - TEXT - The error raised by the request if applicable
  - `internal_ip` - TEXT - The internal IP address of the device that ran the test
  - `external_ip` - TEXT - The external IP address of the device/network that ran the test
+
+> Note: If an error occurs during the request, `status_code` will be set to `-1`, `time_seconds` set to `0` and the
+error caught will be logged in `request_error`.
 
 <!-- Contributing -->
 ## Contributing

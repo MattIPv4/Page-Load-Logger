@@ -5,6 +5,9 @@ from typing import Any, Optional, List
 from warnings import warn
 
 import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class Database:
@@ -66,24 +69,28 @@ class Database:
         """
         self.__execute('''CREATE TABLE IF NOT EXISTS results
         (test_id INTEGER PRIMARY KEY,
-        datetime_utc DATETIME DEFAULT CURRENT_TIMESTAMP,
-        target_url TEXT,
-        time_seconds REAL,
-        status_code INT,
-        internal_ip TEXT,
-        external_ip TEXT)''')
+        datetime_utc DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        target_url TEXT NOT NULL,
+        time_seconds REAL NOT NULL,
+        status_code INT NOT NULL,
+        request_error TEXT,
+        internal_ip TEXT NOT NULL,
+        external_ip TEXT NOT NULL)''')
 
-    def log(self, target_url: str, time_seconds: float, status_code: int, internal_ip: str, external_ip: str):
+    def log(self, target_url: str, time_seconds: float, status_code: int, request_error: Optional[str],
+            internal_ip: str, external_ip: str):
         """
         Logs a test result to the database
         :param target_url: The target URL of the test
         :param time_seconds: The time, in seconds, taken to load the target
         :param status_code: The status code of the target URL response
+        :param request_error: The error raised by the request if any
         :param internal_ip: The internal IP of the device testing
         :param external_ip: The external IP of the network testing
         """
-        self.__execute('''INSERT INTO results (target_url, time_seconds, status_code, internal_ip, external_ip)
-        VALUES (?,?,?,?,?)''', (target_url, time_seconds, status_code, internal_ip, external_ip))
+        self.__execute('''INSERT INTO results (target_url, time_seconds, status_code, request_error, internal_ip,
+        external_ip) VALUES (?,?,?,?,?,?)''',
+                       (target_url, time_seconds, status_code, request_error, internal_ip, external_ip))
 
 
 class Tester:
@@ -98,6 +105,7 @@ class Tester:
         self.__db = None
         self.__time = None
         self.__status = None
+        self.__error = None
         self.__int_ip = None
         self.__ext_ip = None
         self.__target = None
@@ -135,6 +143,7 @@ class Tester:
         """
         self.__target = target
         self.__time = None
+        self.__error = None
         return self
 
     def test_target(self) -> "Tester":
@@ -146,9 +155,14 @@ class Tester:
             warn("No target is defined, test_target did not run")
             return self
 
-        request = requests.get(self.__target)
-        self.__time = request.elapsed.total_seconds()
-        self.__status = request.status_code
+        try:
+            request = requests.get(self.__target, verify=False)
+            self.__time = request.elapsed.total_seconds()
+            self.__status = request.status_code
+        except Exception as e:
+            self.__time = 0
+            self.__status = -1
+            self.__error = str(e)
         return self
 
     def get_internal_ip(self) -> "Tester":
@@ -184,7 +198,7 @@ class Tester:
         if self.__ext_ip is None:
             warn("External IP is not known, run get_external_ip before log_results")
             return self
-        self.__db.log(self.__target, self.__time, self.__status, self.__int_ip, self.__ext_ip)
+        self.__db.log(self.__target, self.__time, self.__status, self.__error, self.__int_ip, self.__ext_ip)
 
 
 class Config:
